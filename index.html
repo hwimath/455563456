@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>약수의 개수 및 관련 문제 게임</title>
+    <!-- MathJax 라이브러리 로드 -->
+    <script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" defer></script>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f0f8ff;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        #start-screen, #game-screen, #end-screen {
+            display: none;
+            padding: 20px;
+        }
+        #start-screen.visible, #game-screen.visible, #end-screen.visible {
+            display: block;
+        }
+        h1 {
+            color: #2e8b57;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .button {
+            padding: 15px 25px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #20b2aa;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #3cb371;
+        }
+        #energy-bar {
+            width: 100%;
+            height: 25px;
+            background-color: #eee;
+            margin: 20px 0;
+            border-radius: 5px;
+            overflow: hidden;
+        }
+        #energy {
+            height: 100%;
+            background-color: #ff6347;
+            width: 100%;
+            transition: width 0.2s linear;
+        }
+        #stats {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        #message {
+            font-size: 22px;
+            color: #dc143c;
+            margin-top: 20px;
+            min-height: 30px;
+        }
+        .question-container {
+            margin: 20px 0;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .question {
+            font-size: 20px;
+            margin-bottom: 10px;
+        }
+        .answer-input {
+            padding: 10px;
+            font-size: 18px;
+            width: 200px;
+            margin-bottom: 20px;
+        }
+        #submit-answer {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #1e90ff;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        #submit-answer:hover {
+            background-color: #00bfff;
+        }
+        #next-button {
+            padding: 10px 20px;
+            font-size: 18px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #32cd32;
+            color: white;
+            transition: background-color 0.3s;
+            display: none;
+        }
+        #next-button:hover {
+            background-color: #3cb371;
+        }
+        #results {
+            margin-top: 20px;
+            text-align: left;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .result-item {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 시작 화면 -->
+    <div id="start-screen" class="visible">
+        <h1>약수의 개수 및 관련 문제 게임</h1>
+        <h2>난이도를 선택하세요</h2>
+        <button class="button" onclick="startGame('highest')">최상</button>
+        <button class="button" onclick="startGame('high')">상</button>
+        <button class="button" onclick="startGame('medium')">중</button>
+        <button class="button" onclick="startGame('low')">하</button>
+    </div>
+
+    <!-- 게임 화면 -->
+    <div id="game-screen">
+        <h1>약수의 개수 및 관련 문제 게임</h1>
+        <div id="energy-bar">
+            <div id="energy"></div>
+        </div>
+        <div id="question-container">
+            <!-- 현재 문제가 여기 표시됩니다 -->
+        </div>
+        <button id="submit-answer" onclick="submitAnswer()">답 제출하기</button>
+        <button id="next-button" onclick="nextQuestion()">다음 문제</button>
+        <div id="message"></div>
+        <div id="stats">
+            <p>점수: <span id="score">0</span></p>
+            <p>남은 기회: <span id="lives">3</span></p>
+            <p>총 게임 시간: <span id="game-time">0</span>초</p>
+        </div>
+    </div>
+
+    <!-- 종료 화면 -->
+    <div id="end-screen">
+        <h1>게임 종료!</h1>
+        <p>최종 점수: <span id="final-score">0</span></p>
+        <p>총 게임 시간: <span id="final-time">0</span>초</p>
+        <div id="results">
+            <h2>정답 확인</h2>
+            <!-- 정답 결과가 여기 표시됩니다 -->
+        </div>
+        <button class="button" onclick="restartGame()">다시 시작</button>
+    </div>
+
+    <script>
+        window.onload = function() {
+            // 난이도별 설정
+            const difficultySettings = {
+                'highest': { time: 20, points: 20 },
+                'high': { time: 25, points: 15 },
+                'medium': { time: 30, points: 10 },
+                'low': { time: 35, points: 5 }
+            };
+            let difficulty;
+            let timeLimit;
+            let score = 0;
+            let lives = 3;
+            let totalGameTime = 0;
+            let gameInterval;
+            let energyInterval;
+            let gameStartTime;
+
+            let currentQuestionIndex = 0;
+            let shuffledQuestions = [];
+
+            // 문제 및 정답 데이터 (답이 존재하는 문제만 포함)
+            const questions = [
+                // 1번부터 23번까지: "다음 수의 약수의 개수를 구하여라."
+                { question: "다음 수의 약수의 개수를 구하여라. \\(3^4\\)", answer: 5 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^6\\)", answer: 7 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^3 \\times 3^2\\)", answer: 12 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(3^2 \\times 8^7\\)", answer: 66 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(3 \\times 8^7\\)", answer: 44 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(8^3 \\times 7\\)", answer: 20 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^2 \\times 3^6\\)", answer: 21 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^3 \\times 8^3\\)", answer: 13 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(6^8 \\times 7^5\\)", answer: 486 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(6^8 \\times 11\\)", answer: 162 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(13 \\times 2^3 \\times 14\\)", answer: 20 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(1111 \\times 297\\)", answer: 24 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(3^2 \\times 8^3\\)", answer: 30 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^7 \\times 3^2\\)", answer: 24 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(3^6 \\times 8^7\\)", answer: 154 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(8^3 \\times 7^5\\)", answer: 60 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2 \\times 3^2 \\times 8^5\\)", answer: 51 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^7 \\times 3 \\times 8^5\\)", answer: 46 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(3^2 \\times 8^3 \\times 7^7\\)", answer: 240 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^3 \\times 8^8 \\times 7^5\\)", answer: 168 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2 \\times 3 \\times 8^5\\)", answer: 34 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(2^2 \\times 3^6 \\times 7\\)", answer: 42 },
+                { question: "다음 수의 약수의 개수를 구하여라. \\(3^2 \\times 8^3 \\times 7^5\\)", answer: 180 },
+
+                // 41번부터 47번까지: "약수의 개수가 주어질 때 자연수 a의 값을 구하여라." (답이 존재하는 문제만 포함)
+                { question: "약수의 개수가 주어질 때 자연수 a의 값을 구하여라. \\(3^a \\times 7^2\\)으로 소인수분해되는 자연수의 약수의 개수가 21개", answer: 6 },
+                { question: "약수의 개수가 주어질 때 자연수 a의 값을 구하여라. \\(2^7\\)의 약수의 개수와 \\(2^a \\times 7\\)의 약수의 개수가 같을 때", answer: 3 },
+
+                // 48번부터 60번까지: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라."
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 24", answer: 6 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 78", answer: 78 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 90", answer: 10 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 80", answer: 5 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 88", answer: 22 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 108", answer: 3 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 138", answer: 138 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 170", answer: 170 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 141", answer: 141 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 189", answer: 21 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 270", answer: 30 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 369", answer: 41 },
+                { question: "다음 수에 자연수를 곱하여 제곱수가 될 때 곱할 수 있는 가장 작은 자연수를 구하여라. 807", answer: 807 },
+
+              
+            ];
+
+            // Function to start the game
+            window.startGame = function(selectedDifficulty) {
+                difficulty = selectedDifficulty;
+                timeLimit = difficultySettings[difficulty].time;
+                document.getElementById('start-screen').classList.remove('visible');
+                document.getElementById('game-screen').classList.add('visible');
+                gameStartTime = Date.now();
+                score = 0;
+                lives = 3;
+                totalGameTime = 0;
+                currentQuestionIndex = 0;
+                updateStats();
+                shuffleArray(questions); // 문제 목록 섞기
+                renderQuestion();
+                if (difficulty !== 'low') {
+                    startEnergyBar();
+                }
+                gameInterval = setInterval(() => {
+                    totalGameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                    document.getElementById('game-time').innerText = totalGameTime;
+                }, 1000);
+            }
+
+            // Function to shuffle the questions array
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    let j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            // Function to render the current question
+            function renderQuestion() {
+                if (currentQuestionIndex >= questions.length) {
+                    endGame();
+                    return;
+                }
+                const container = document.getElementById('question-container');
+                container.innerHTML = '';
+                const currentQuestion = questions[currentQuestionIndex];
+                const div = document.createElement('div');
+                div.className = 'question-container';
+                div.innerHTML = `
+                    <div class="question">${currentQuestion.question}</div>
+                    <input type="text" class="answer-input" id="answer-input" placeholder="답을 입력하세요">
+                `;
+                container.appendChild(div);
+                MathJax.typesetPromise();
+                document.getElementById('message').innerHTML = '';
+                document.getElementById('submit-answer').style.display = 'inline-block';
+                document.getElementById('next-button').style.display = 'none';
+            }
+
+            // Function to submit the answer
+            window.submitAnswer = function() {
+                clearInterval(energyInterval);
+                const userAnswer = document.getElementById('answer-input').value.trim();
+                const currentQuestion = questions[currentQuestionIndex];
+                let isCorrect = false;
+                if (typeof currentQuestion.answer === 'number') {
+                    if (Number(userAnswer) === currentQuestion.answer) {
+                        isCorrect = true;
+                        score += difficultySettings[difficulty].points;
+                        document.getElementById('message').innerHTML = '정답입니다! 🎉';
+                    } else {
+                        lives--;
+                        document.getElementById('message').innerHTML = `틀렸습니다! 정답은 <strong>${currentQuestion.answer}</strong>입니다. 😢`;
+                    }
+                } else {
+                    // For questions without a numerical answer
+                    if (userAnswer === currentQuestion.answer) {
+                        isCorrect = true;
+                        score += difficultySettings[difficulty].points;
+                        document.getElementById('message').innerHTML = '정답입니다! 🎉';
+                    } else {
+                        lives--;
+                        document.getElementById('message').innerHTML = `틀렸습니다! ${currentQuestion.answer}`;
+                    }
+                }
+                updateStats();
+                document.getElementById('submit-answer').style.display = 'none';
+                document.getElementById('next-button').style.display = 'inline-block';
+                if (lives <= 0) {
+                    endGame();
+                }
+            }
+
+            // Function to go to the next question
+            window.nextQuestion = function() {
+                currentQuestionIndex++;
+                renderQuestion();
+                if (difficulty !== 'low') {
+                    startEnergyBar();
+                }
+            }
+
+            // Function to update the stats
+            function updateStats() {
+                document.getElementById('score').innerText = score;
+                document.getElementById('lives').innerText = lives;
+                document.getElementById('game-time').innerText = totalGameTime;
+            }
+
+            // Function to end the game
+            function endGame() {
+                clearInterval(gameInterval);
+                clearInterval(energyInterval);
+                document.getElementById('game-screen').classList.remove('visible');
+                document.getElementById('end-screen').classList.add('visible');
+                document.getElementById('final-score').innerText = score;
+                document.getElementById('final-time').innerText = totalGameTime;
+                const resultsContainer = document.getElementById('results');
+                resultsContainer.innerHTML = '<h2>정답 확인</h2>';
+                questions.forEach((q, index) => {
+                    resultsContainer.innerHTML += `<div class="result-item">${q.question} <br><strong>정답:</strong> ${q.answer}</div>`;
+                });
+            }
+
+            // Function to restart the game
+            window.restartGame = function() {
+                score = 0;
+                lives = 3;
+                totalGameTime = 0;
+                currentQuestionIndex = 0;
+                document.getElementById('end-screen').classList.remove('visible');
+                document.getElementById('game-screen').classList.add('visible');
+                updateStats();
+                shuffleArray(questions); // 게임 재시작 시 문제 목록 다시 섞기
+                renderQuestion();
+                if (difficulty !== 'low') {
+                    startEnergyBar();
+                }
+                gameStartTime = Date.now();
+                gameInterval = setInterval(() => {
+                    totalGameTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                    document.getElementById('game-time').innerText = totalGameTime;
+                }, 1000);
+            }
+
+            // Function to start the energy bar
+            function startEnergyBar() {
+                clearInterval(energyInterval);
+                let energyBar = document.getElementById('energy');
+                let width = 100;
+                let decrement = 100 / (timeLimit * 10); // 에너지 바 업데이트 간격에 따라 조정
+
+                energyBar.style.width = '100%';
+                energyInterval = setInterval(() => {
+                    width -= decrement;
+                    if (width <= 0) {
+                        clearInterval(energyInterval);
+                        lives--;
+                        const currentQuestion = questions[currentQuestionIndex];
+                        document.getElementById('message').innerHTML = `시간 초과! 정답은 <strong>${currentQuestion.answer}</strong>입니다. 😮`;
+                        updateStats();
+                        document.getElementById('submit-answer').style.display = 'none';
+                        document.getElementById('next-button').style.display = 'inline-block';
+                        if (lives <= 0) {
+                            endGame();
+                        }
+                    } else {
+                        energyBar.style.width = width + '%';
+                    }
+                }, 100); // 0.1초마다 에너지 바 업데이트
+            }
+        };
+    </script>
+
+</body>
+</html>
